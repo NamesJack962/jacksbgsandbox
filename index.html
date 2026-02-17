@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Component Architect - P2P Sandbox</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Handsontable -->
+    <script src="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.css">
+
+    <style>
+        body { overflow: hidden; background-color: #0f172a; color: #f1f5f9; }
+        .canvas-container { cursor: grab; background-color: #1e293b; background-image: radial-gradient(#334155 1px, transparent 1px); background-size: 30px 30px; }
+        .canvas-container:active { cursor: grabbing; }
+        
+        /* Handsontable Overrides */
+        .hot-container { height: 100%; width: 100%; font-size: 11px; }
+        .handsontable th, .handsontable td { background: #1e293b !important; border-color: #334155 !important; color: #cbd5e1 !important; }
+        
+        /* Layout Grid */
+        .layout-grid-cell { aspect-ratio: 1; border: 1px solid #334155; transition: all 0.1s; cursor: crosshair; }
+        .zone-none { background: transparent; }
+        .zone-header { background: #ef4444; } /* Red */
+        .zone-image { background: #3b82f6; }  /* Blue */
+        .zone-body { background: #10b981; }   /* Green */
+        .zone-footer { background: #f59e0b; } /* Amber */
+
+        .sidebar { width: 400px; }
+        .designer-panel { width: 320px; border-left: 1px solid #334155; }
+    </style>
+</head>
+<body class="h-screen flex flex-col font-sans">
+
+    <!-- Navbar -->
+    <nav class="h-14 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 z-50">
+        <div class="flex items-center gap-4">
+            <h1 class="font-bold text-lg text-sky-400 flex items-center gap-2">
+                <i data-lucide="layout-template"></i> Component Architect
+            </h1>
+            <div id="connection-badge" class="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+                <span id="status-dot" class="w-2 h-2 rounded-full bg-red-500"></span>
+                <span id="status-text" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Standalone</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <div class="flex items-center bg-slate-800 rounded px-2 py-1 gap-2 border border-slate-700">
+                <span class="text-[10px] text-slate-500 font-mono">MY ID:</span>
+                <span id="my-peer-id" class="text-xs font-mono text-white select-all">...</span>
+            </div>
+            <div class="flex gap-1">
+                <input id="connect-id" type="text" placeholder="Peer ID" class="bg-slate-950 border border-slate-700 rounded-l px-2 py-1 text-xs w-24 focus:outline-none focus:border-sky-500">
+                <button onclick="connectToPeer()" class="bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded-r text-xs font-bold transition-all">Link</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-1 flex overflow-hidden">
+        <!-- Registry Sidebar -->
+        <aside class="sidebar flex flex-col bg-slate-900 border-r border-slate-800">
+            <div class="p-3 border-b border-slate-800 flex justify-between items-center">
+                <span class="text-[10px] font-bold text-slate-500 uppercase">Component Data</span>
+                <div class="flex gap-2">
+                    <label class="cursor-pointer text-slate-400 hover:text-white" title="Import CSV">
+                        <i data-lucide="file-down" class="w-4 h-4"></i>
+                        <input type="file" id="csv-upload" class="hidden" accept=".csv">
+                    </label>
+                    <button onclick="addRow()" class="text-slate-400 hover:text-white"><i data-lucide="plus-square" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-hidden">
+                <div id="hot-registry" class="hot-container"></div>
+            </div>
+            <div class="p-3 bg-slate-950 border-t border-slate-800">
+                <button onclick="spawnSelected()" id="spawn-btn" disabled class="w-full bg-sky-600 hover:bg-sky-500 disabled:opacity-20 py-2 rounded text-xs font-bold transition-all">
+                    SPAWN COMPONENT
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <section class="flex-1 relative canvas-container overflow-hidden" id="board-container">
+            <canvas id="game-canvas"></canvas>
+            
+            <div class="absolute bottom-4 right-4 flex gap-2">
+                <div class="bg-slate-900/90 backdrop-blur border border-slate-700 rounded p-1 flex shadow-2xl">
+                    <button onclick="adjustZoom(1.2)" class="p-2 hover:bg-slate-800 rounded"><i data-lucide="zoom-in" class="w-4 h-4"></i></button>
+                    <button onclick="adjustZoom(0.8)" class="p-2 hover:bg-slate-800 rounded"><i data-lucide="zoom-out" class="w-4 h-4"></i></button>
+                    <button onclick="resetView()" class="p-2 hover:bg-slate-800 rounded"><i data-lucide="maximize" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Layout Designer Panel -->
+        <aside class="designer-panel bg-slate-900 flex flex-col">
+            <div class="p-4 border-b border-slate-800 bg-slate-950/50">
+                <h3 class="text-xs font-bold uppercase text-slate-400 mb-4 tracking-widest">Layout Designer</h3>
+                
+                <!-- Zone Palette -->
+                <div class="grid grid-cols-2 gap-2 mb-4">
+                    <button onclick="setActiveZone('header')" class="flex items-center gap-2 p-2 rounded bg-slate-800 border-2 border-transparent hover:border-slate-600" id="tool-header">
+                        <div class="w-3 h-3 zone-header rounded-full"></div> <span class="text-[10px]">Header</span>
+                    </button>
+                    <button onclick="setActiveZone('image')" class="flex items-center gap-2 p-2 rounded bg-slate-800 border-2 border-transparent hover:border-slate-600" id="tool-image">
+                        <div class="w-3 h-3 zone-image rounded-full"></div> <span class="text-[10px]">Image Box</span>
+                    </button>
+                    <button onclick="setActiveZone('body')" class="flex items-center gap-2 p-2 rounded bg-slate-800 border-2 border-transparent hover:border-slate-600" id="tool-body">
+                        <div class="w-3 h-3 zone-body rounded-full"></div> <span class="text-[10px]">Body Text</span>
+                    </button>
+                    <button onclick="setActiveZone('none')" class="flex items-center gap-2 p-2 rounded bg-slate-800 border-2 border-transparent hover:border-slate-600" id="tool-none">
+                        <div class="w-3 h-3 border border-slate-600 rounded-full"></div> <span class="text-[10px]">Eraser</span>
+                    </button>
+                </div>
+
+                <!-- Graphical Array Selector -->
+                <div class="bg-slate-950 p-2 rounded border border-slate-800 flex justify-center">
+                    <div id="layout-grid" class="grid grid-cols-8 gap-[1px] w-full max-w-[240px]">
+                        <!-- Cells generated by JS -->
+                    </div>
+                </div>
+                <p class="text-[9px] text-slate-500 mt-3 italic text-center uppercase tracking-wide">Click or Drag to Paint Zones</p>
+            </div>
+
+            <div class="p-4 flex-1">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-slate-500">SAVED LAYOUTS</span>
+                    <button onclick="saveLayout()" class="text-sky-500 hover:text-sky-400 font-bold text-[10px]">NEW +</button>
+                </div>
+                <div id="layout-list" class="flex flex-col gap-1 overflow-y-auto max-h-[300px]">
+                    <!-- Layout items -->
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <script>
+        // --- State ---
+        const App = {
+            registry: [
+                { id: 'c1', name: 'Fireball', text: 'Deal 5 damage to a single target.', color: '#ef4444', type: 'Spell', layoutId: 'default' },
+                { id: 'c2', name: 'Guard', text: 'Block 3 damage next turn.', color: '#3b82f6', type: 'Defense', layoutId: 'default' }
+            ],
+            instances: [],
+            layouts: [
+                { id: 'default', name: 'Standard Card', grid: Array(96).fill('none') } // 8x12 grid
+            ],
+            activeLayoutId: 'default',
+            activeZone: 'header',
+            camera: { x: 0, y: 0, zoom: 1 },
+            input: { isDragging: false, isPainting: false, lastX: 0, lastY: 0, target: null, mode: null },
+            peer: null,
+            connections: new Map(),
+            hot: null,
+            selectedRegistryId: null,
+            nextZ: 10
+        };
+
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('board-container');
+
+        // --- Layout Designer Core ---
+        function initLayoutDesigner() {
+            const gridEl = document.getElementById('layout-grid');
+            gridEl.innerHTML = '';
+            // Generate 8 columns x 12 rows = 96 cells
+            for (let i = 0; i < 96; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'layout-grid-cell zone-none';
+                cell.dataset.index = i;
+                
+                cell.addEventListener('mousedown', (e) => {
+                    App.input.isPainting = true;
+                    paintCell(i);
+                });
+                cell.addEventListener('mouseenter', (e) => {
+                    if (App.input.isPainting) paintCell(i);
+                });
+                gridEl.appendChild(cell);
+            }
+            window.addEventListener('mouseup', () => App.input.isPainting = false);
+            refreshLayoutUI();
+        }
+
+        function setActiveZone(zone) {
+            App.activeZone = zone;
+            document.querySelectorAll('[id^="tool-"]').forEach(el => el.classList.remove('border-sky-500'));
+            document.getElementById(`tool-${zone}`).classList.add('border-sky-500');
+        }
+
+        function paintCell(index) {
+            const layout = App.layouts.find(l => l.id === App.activeLayoutId);
+            if (!layout) return;
+            layout.grid[index] = App.activeZone;
+            refreshLayoutUI();
+            broadcast({ type: 'SYNC_LAYOUTS', layouts: App.layouts });
+        }
+
+        function refreshLayoutUI() {
+            const layout = App.layouts.find(l => l.id === App.activeLayoutId);
+            const cells = document.querySelectorAll('.layout-grid-cell');
+            cells.forEach((cell, idx) => {
+                cell.className = `layout-grid-cell zone-${layout.grid[idx]}`;
+            });
+
+            // Refresh Layout List
+            const list = document.getElementById('layout-list');
+            list.innerHTML = '';
+            App.layouts.forEach(l => {
+                const btn = document.createElement('button');
+                btn.className = `text-left px-3 py-2 rounded text-[11px] font-medium transition-all ${l.id === App.activeLayoutId ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`;
+                btn.innerText = l.name;
+                btn.onclick = () => { App.activeLayoutId = l.id; refreshLayoutUI(); };
+                list.appendChild(btn);
+            });
+        }
+
+        function saveLayout() {
+            const name = prompt("Layout Name:", "New Card Layout");
+            if (!name) return;
+            const newLayout = { id: 'l-' + Date.now(), name, grid: Array(96).fill('none') };
+            App.layouts.push(newLayout);
+            App.activeLayoutId = newLayout.id;
+            refreshLayoutUI();
+            broadcast({ type: 'SYNC_LAYOUTS', layouts: App.layouts });
+        }
+
+        // --- Handsontable ---
+        function initTable() {
+            App.hot = new Handsontable(document.getElementById('hot-registry'), {
+                data: App.registry,
+                columns: [
+                    { data: 'name', type: 'text' },
+                    { data: 'type', type: 'text' },
+                    { data: 'color', type: 'text' },
+                    { data: 'layoutId', type: 'dropdown', source: () => App.layouts.map(l => l.id) }
+                ],
+                colHeaders: ['NAME', 'TYPE', 'HEX', 'LAYOUT'],
+                stretchH: 'all',
+                height: 'auto',
+                licenseKey: 'non-commercial-and-evaluation',
+                afterChange: () => {
+                    broadcast({ type: 'SYNC_REGISTRY', registry: App.registry });
+                },
+                afterSelection: (row) => {
+                    App.selectedRegistryId = App.hot.getSourceDataAtRow(row).id;
+                    document.getElementById('spawn-btn').disabled = false;
+                }
+            });
+        }
+
+        function addRow() {
+            App.registry.push({ id: 'id-' + Date.now(), name: 'New Item', type: 'Token', color: '#94a3b8', text: '', layoutId: 'default' });
+            App.hot.render();
+            broadcast({ type: 'SYNC_REGISTRY', registry: App.registry });
+        }
+
+        // --- Networking ---
+        function initPeer() {
+            App.peer = new Peer();
+            App.peer.on('open', id => document.getElementById('my-peer-id').innerText = id);
+            App.peer.on('connection', conn => {
+                setupConn(conn);
+                setTimeout(() => conn.send({ type: 'FULL_SYNC', registry: App.registry, instances: App.instances, layouts: App.layouts }), 500);
+            });
+        }
+
+        function connectToPeer() {
+            const id = document.getElementById('connect-id').value;
+            if (id) setupConn(App.peer.connect(id));
+        }
+
+        function setupConn(conn) {
+            App.connections.set(conn.peer, conn);
+            conn.on('data', data => {
+                if (data.type === 'FULL_SYNC') {
+                    App.registry = data.registry;
+                    App.instances = data.instances;
+                    App.layouts = data.layouts;
+                    App.hot.loadData(App.registry);
+                    refreshLayoutUI();
+                } else if (data.type === 'SYNC_REGISTRY') {
+                    App.registry = data.registry;
+                    App.hot.loadData(App.registry);
+                } else if (data.type === 'SYNC_LAYOUTS') {
+                    App.layouts = data.layouts;
+                    refreshLayoutUI();
+                } else if (data.type === 'INST_MOVE') {
+                    const inst = App.instances.find(i => i.id === data.id);
+                    if (inst) { inst.x = data.x; inst.y = data.y; inst.zIndex = data.zIndex; }
+                } else if (data.type === 'INST_SPAWN') {
+                    App.instances.push(data.inst);
+                }
+            });
+            updateStatusBadge();
+        }
+
+        function broadcast(msg) { App.connections.forEach(c => c.send(msg)); }
+
+        function updateStatusBadge() {
+            const active = App.connections.size > 0;
+            document.getElementById('status-dot').className = `w-2 h-2 rounded-full ${active ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-red-500'}`;
+            document.getElementById('status-text').innerText = active ? `${App.connections.size} PEERS` : 'STANDALONE';
+        }
+
+        // --- Canvas Rendering Engine ---
+        function initCanvas() {
+            const resize = () => { canvas.width = container.clientWidth; canvas.height = container.clientHeight; };
+            window.addEventListener('resize', resize);
+            resize();
+
+            container.addEventListener('mousedown', e => {
+                const world = screenToWorld(e.offsetX, e.offsetY);
+                const hit = [...App.instances].sort((a,b) => b.zIndex - a.zIndex).find(i => {
+                    return world.x > i.x - 40 && world.x < i.x + 40 && world.y > i.y - 60 && world.y < i.y + 60;
+                });
+
+                if (hit) {
+                    App.input.target = hit;
+                    App.input.mode = 'MOVE';
+                    hit.zIndex = ++App.nextZ;
+                } else {
+                    App.input.mode = 'PAN';
+                }
+                App.input.isDragging = true;
+                App.input.lastX = e.clientX;
+                App.input.lastY = e.clientY;
+            });
+
+            window.addEventListener('mousemove', e => {
+                if (!App.input.isDragging) return;
+                const dx = e.clientX - App.input.lastX;
+                const dy = e.clientY - App.input.lastY;
+
+                if (App.input.mode === 'PAN') {
+                    App.camera.x += dx;
+                    App.camera.y += dy;
+                } else if (App.input.target) {
+                    App.input.target.x += dx / App.camera.zoom;
+                    App.input.target.y += dy / App.camera.zoom;
+                    broadcast({ type: 'INST_MOVE', id: App.input.target.id, x: App.input.target.x, y: App.input.target.y, zIndex: App.input.target.zIndex });
+                }
+                App.input.lastX = e.clientX;
+                App.input.lastY = e.clientY;
+            });
+
+            window.addEventListener('mouseup', () => App.input.isDragging = false);
+            container.addEventListener('wheel', e => {
+                e.preventDefault();
+                const factor = Math.pow(1.1, -e.deltaY / 200);
+                const newZ = Math.min(Math.max(App.camera.zoom * factor, 0.1), 10);
+                App.camera.x = e.offsetX - (e.offsetX - App.camera.x) * (newZ / App.camera.zoom);
+                App.camera.y = e.offsetY - (e.offsetY - App.camera.y) * (newZ / App.camera.zoom);
+                App.camera.zoom = newZ;
+            });
+        }
+
+        function screenToWorld(x, y) {
+            return { x: (x - App.camera.x) / App.camera.zoom, y: (y - App.camera.y) / App.camera.zoom };
+        }
+
+        function spawnSelected() {
+            const world = screenToWorld(canvas.width/2, canvas.height/2);
+            const inst = { id: 'i-'+Date.now(), registryId: App.selectedRegistryId, x: world.x, y: world.y, zIndex: ++App.nextZ };
+            App.instances.push(inst);
+            broadcast({ type: 'INST_SPAWN', inst });
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(App.camera.x, App.camera.y);
+            ctx.scale(App.camera.zoom, App.camera.zoom);
+
+            const sorted = [...App.instances].sort((a,b) => a.zIndex - b.zIndex);
+            sorted.forEach(inst => {
+                const data = App.registry.find(r => r.id === inst.registryId);
+                const layout = App.layouts.find(l => l.id === data?.layoutId) || App.layouts[0];
+                if (!data) return;
+
+                ctx.save();
+                ctx.translate(inst.x, inst.y);
+
+                // Card Base
+                ctx.fillStyle = data.color;
+                ctx.strokeStyle = '#ffffff22';
+                ctx.lineWidth = 1;
+                roundRect(ctx, -40, -60, 80, 120, 6, true, true);
+
+                // Graphical Layout Rendering
+                const gridW = 80 / 8;
+                const gridH = 120 / 12;
+
+                layout.grid.forEach((zone, idx) => {
+                    if (zone === 'none') return;
+                    const gx = (idx % 8) * gridW - 40;
+                    const gy = Math.floor(idx / 8) * gridH - 60;
+
+                    if (zone === 'header') {
+                        ctx.fillStyle = '#00000033';
+                        ctx.fillRect(gx, gy, gridW, gridH);
+                        ctx.fillStyle = 'white';
+                        ctx.font = 'bold 3px sans-serif';
+                        ctx.textAlign = 'center';
+                        // Only draw text on specific center cells of header to avoid clutter
+                        if (idx === 12) ctx.fillText(data.name, 0, gy + gridH/2);
+                    } else if (zone === 'image') {
+                        ctx.fillStyle = '#ffffff22';
+                        ctx.fillRect(gx, gy, gridW, gridH);
+                    } else if (zone === 'body') {
+                        ctx.fillStyle = '#00000011';
+                        ctx.fillRect(gx, gy, gridW, gridH);
+                        // Body text logic could go here
+                    }
+                });
+
+                ctx.restore();
+            });
+
+            ctx.restore();
+            requestAnimationFrame(render);
+        }
+
+        function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+            ctx.beginPath();
+            ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+            ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+            ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+            ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y); ctx.closePath();
+            if (fill) ctx.fill(); if (stroke) ctx.stroke();
+        }
+
+        function adjustZoom(f) {
+            const cx = canvas.width/2, cy = canvas.height/2;
+            const newZ = App.camera.zoom * f;
+            App.camera.x = cx - (cx - App.camera.x) * (newZ / App.camera.zoom);
+            App.camera.y = cy - (cy - App.camera.y) * (newZ / App.camera.zoom);
+            App.camera.zoom = newZ;
+        }
+
+        function resetView() { App.camera = { x: 0, y: 0, zoom: 1 }; }
+
+        window.onload = () => {
+            lucide.createIcons();
+            initLayoutDesigner();
+            initTable();
+            initCanvas();
+            initPeer();
+            render();
+            setActiveZone('header');
+        };
+    </script>
+</body>
+</html>
