@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Component Architect Pro - P2P Sandbox</title>
+    <title>Component Architect - Unified Sandbox</title>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Dependencies -->
@@ -17,159 +17,150 @@
 
     <style>
         body { overflow: hidden; background-color: #0f172a; color: #f1f5f9; }
-        .canvas-container { cursor: grab; background-color: #111827; background-image: radial-gradient(#1e293b 1px, transparent 1px); background-size: 40px 40px; }
+        .canvas-container { cursor: grab; background-color: #020617; }
         .canvas-container:active { cursor: grabbing; }
         
-        /* Handsontable Dark Theme Overrides */
+        /* Handsontable Overrides */
         .hot-container { height: 100%; width: 100%; font-size: 11px; }
         .handsontable th, .handsontable td { background: #1e293b !important; border-color: #334155 !important; color: #cbd5e1 !important; }
-        .handsontable .htPlaceholder { color: #475569 !important; }
         
         /* Layout Grid Styles */
         .layout-grid-cell { aspect-ratio: 1; border: 1px solid #334155; transition: all 0.1s; cursor: crosshair; }
         .zone-none { background: transparent; }
-        .zone-header { background: rgba(239, 68, 68, 0.4); border: 1px solid #ef4444; }
-        .zone-image { background: rgba(59, 130, 246, 0.4); border: 1px solid #3b82f6; }
-        .zone-body { background: rgba(16, 185, 129, 0.4); border: 1px solid #10b981; }
+        .zone-title { background: rgba(239, 68, 68, 0.4); border: 1px solid #ef4444; }
+        .zone-art { background: rgba(59, 130, 246, 0.4); border: 1px solid #3b82f6; }
+        .zone-description { background: rgba(16, 185, 129, 0.4); border: 1px solid #10b981; }
 
-        .sidebar { width: 420px; }
+        .sidebar { width: 450px; }
         .designer-panel { width: 340px; border-left: 1px solid #334155; }
+
+        #component-tooltip { pointer-events: none; transition: opacity 0.2s; z-index: 1000; }
     </style>
 </head>
 <body class="h-screen flex flex-col font-sans">
+
+    <!-- Tooltip -->
+    <div id="component-tooltip" class="fixed opacity-0 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-4 w-64">
+        <div id="tooltip-color-strip" class="h-1.5 w-full rounded-full mb-3"></div>
+        <h4 id="tooltip-name" class="font-bold text-white text-sm mb-1 uppercase tracking-wider">Name</h4>
+        <div id="tooltip-shape" class="text-[9px] text-indigo-400 font-bold mb-3 uppercase tracking-widest flex items-center gap-1">
+             <i data-lucide="box" class="w-3 h-3"></i> <span id="tooltip-shape-val">Card</span>
+        </div>
+        <div id="tooltip-content" class="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap italic">Content...</div>
+    </div>
 
     <!-- Navbar -->
     <nav class="h-14 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 z-50">
         <div class="flex items-center gap-4">
             <h1 class="font-bold text-lg text-indigo-400 flex items-center gap-2">
-                <i data-lucide="layout-template"></i> Component Architect
+                <i data-lucide="component"></i> Component Architect
             </h1>
-            <div class="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+            <div class="flex items-center gap-2 bg-slate-950 px-3 py-1 rounded-full border border-slate-800">
                 <span id="status-dot" class="w-2 h-2 rounded-full bg-red-500"></span>
-                <span id="status-text" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Offline</span>
+                <span id="status-text" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Offline</span>
             </div>
         </div>
 
         <div class="flex items-center gap-3">
             <div class="flex items-center bg-slate-800 rounded px-2 py-1 gap-2 border border-slate-700">
-                <span class="text-[10px] text-slate-500 font-mono">SESSION:</span>
+                <span class="text-[9px] text-slate-500 font-mono">MY ID:</span>
                 <span id="my-peer-id" class="text-xs font-mono text-white select-all">...</span>
                 <button onclick="copyId()" class="hover:text-indigo-400"><i data-lucide="copy" class="w-3 h-3"></i></button>
             </div>
             <div class="flex gap-1">
-                <input id="connect-id" type="text" placeholder="Connect ID" class="bg-slate-950 border border-slate-700 rounded-l px-2 py-1 text-xs w-28 focus:outline-none focus:border-indigo-500">
+                <input id="connect-id" type="text" placeholder="Peer ID" class="bg-slate-950 border border-slate-700 rounded-l px-2 py-1 text-xs w-24 focus:outline-none focus:border-indigo-500">
                 <button onclick="connectToPeer()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-r text-xs font-bold transition-all">Link</button>
             </div>
         </div>
     </nav>
 
     <main class="flex-1 flex overflow-hidden">
-        <!-- Registry Sidebar -->
+        <!-- Component Registry -->
         <aside class="sidebar flex flex-col bg-slate-900 border-r border-slate-800">
             <div class="p-3 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
-                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Component Data</span>
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono">System Registry</span>
                 <div class="flex gap-2">
                     <label class="cursor-pointer text-slate-400 hover:text-white" title="Import CSV">
-                        <i data-lucide="file-up" class="w-4 h-4"></i>
+                        <i data-lucide="upload-cloud" class="w-4 h-4"></i>
                         <input type="file" id="csv-upload" class="hidden" accept=".csv">
                     </label>
-                    <button onclick="addRow()" class="text-slate-400 hover:text-white" title="New Component"><i data-lucide="plus-circle" class="w-4 h-4"></i></button>
+                    <button onclick="addRow()" class="text-slate-400 hover:text-white"><i data-lucide="plus" class="w-4 h-4"></i></button>
                 </div>
             </div>
             <div class="flex-1 overflow-hidden">
                 <div id="hot-registry" class="hot-container"></div>
             </div>
             <div class="p-4 bg-slate-950 border-t border-slate-800">
-                <div class="flex justify-between items-center mb-3">
-                    <span class="text-[10px] font-bold text-slate-500 uppercase">Spawn Control</span>
-                    <span id="selection-status" class="text-[10px] text-indigo-400 italic">No Selection</span>
-                </div>
-                <button onclick="spawnSelected()" id="spawn-btn" disabled class="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-20 py-2.5 rounded text-xs font-bold transition-all shadow-lg">
-                    PLACE ON BOARD
+                <button onclick="spawnSelected()" id="spawn-btn" disabled class="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-20 py-3 rounded text-xs font-bold transition-all shadow-xl uppercase tracking-widest">
+                    Spawn at Grid Snap
                 </button>
             </div>
         </aside>
 
-        <!-- Workspace Canvas -->
+        <!-- Sandbox Workspace -->
         <section class="flex-1 relative canvas-container overflow-hidden" id="board-container">
             <canvas id="game-canvas"></canvas>
             
-            <div class="absolute bottom-6 right-6 flex flex-col gap-2">
-                <div class="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-lg p-1.5 flex flex-col shadow-2xl">
-                    <button onclick="adjustZoom(1.2)" class="p-2 hover:bg-slate-800 rounded text-slate-300"><i data-lucide="zoom-in" class="w-5 h-5"></i></button>
-                    <button onclick="adjustZoom(0.8)" class="p-2 hover:bg-slate-800 rounded text-slate-300"><i data-lucide="zoom-out" class="w-5 h-5"></i></button>
-                    <div class="h-px bg-slate-700 my-1 mx-2"></div>
-                    <button onclick="resetView()" class="p-2 hover:bg-slate-800 rounded text-slate-300"><i data-lucide="maximize" class="w-5 h-5"></i></button>
-                </div>
-            </div>
-
-            <div class="absolute top-4 left-4 pointer-events-none">
-                <div class="bg-black/40 text-[10px] px-3 py-1.5 rounded-full text-slate-400 font-mono flex gap-4">
-                    <span id="zoom-text">Zoom: 100%</span>
-                    <span id="count-text">Instances: 0</span>
+            <div class="absolute top-4 left-4 flex flex-col gap-2 pointer-events-none">
+                <div class="bg-black/60 backdrop-blur text-[10px] px-3 py-1.5 rounded-full text-slate-400 font-mono border border-white/5 flex gap-4">
+                    <span id="zoom-text">100% Zoom</span>
+                    <span id="count-text">0 Objects</span>
+                    <span class="text-indigo-400">Grid: 40px Snap</span>
                 </div>
             </div>
         </section>
 
-        <!-- Layout Designer -->
+        <!-- Layout Palette -->
         <aside class="designer-panel bg-slate-900 flex flex-col">
             <div class="p-5 border-b border-slate-800">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xs font-bold uppercase text-slate-500 tracking-widest">Layout Array</h3>
-                    <button onclick="saveLayout()" class="text-indigo-400 hover:text-indigo-300 text-[10px] font-bold flex items-center gap-1">
-                        <i data-lucide="save" class="w-3 h-3"></i> NEW
-                    </button>
+                    <h3 class="text-xs font-bold uppercase text-slate-400 tracking-widest">Layout Array</h3>
+                    <button onclick="saveLayout()" class="text-indigo-400 hover:text-indigo-300 text-[10px] font-bold">NEW LAYOUT</button>
                 </div>
                 
-                <!-- Zone Palette -->
                 <div class="grid grid-cols-2 gap-2 mb-6">
-                    <button onclick="setActiveZone('header')" class="flex items-center gap-2 p-2 rounded bg-slate-800 border-2 border-transparent hover:border-slate-600 transition-all" id="tool-header">
-                        <div class="w-3 h-3 bg-red-500 rounded-sm"></div> <span class="text-[10px] font-bold">HEADER</span>
+                    <button onclick="setActiveZone('title')" class="flex items-center gap-2 p-2 rounded bg-slate-800 border-2 border-transparent" id="tool-title">
+                        <div class="w-3 h-3 bg-red-500 rounded-sm"></div> <span class="text-[9px] font-bold uppercase">Title</span>
                     </button>
-                    <button onclick="setActiveZone('image')" class="flex items-center gap-2 p-2 rounded bg-slate-800 border-2 border-transparent hover:border-slate-600 transition-all" id="tool-image">
-                        <div class="w-3 h-3 bg-blue-500 rounded-sm"></div> <span class="text-[10px] font-bold">IMAGE</span>
+                    <button onclick="setActiveZone('art')" class="flex items-center gap-2 p-2 rounded bg-slate-800 border-2 border-transparent" id="tool-art">
+                        <div class="w-3 h-3 bg-blue-500 rounded-sm"></div> <span class="text-[9px] font-bold uppercase">Art</span>
                     </button>
-                    <button onclick="setActiveZone('body')" class="flex items-center gap-2 p-2 rounded bg-slate-800 border-2 border-transparent hover:border-slate-600 transition-all" id="tool-body">
-                        <div class="w-3 h-3 bg-emerald-500 rounded-sm"></div> <span class="text-[10px] font-bold">BODY</span>
+                    <button onclick="setActiveZone('description')" class="flex items-center gap-2 p-2 rounded bg-slate-800 border-2 border-transparent" id="tool-description">
+                        <div class="w-3 h-3 bg-emerald-500 rounded-sm"></div> <span class="text-[9px] font-bold uppercase">Desc</span>
                     </button>
-                    <button onclick="setActiveZone('none')" class="flex items-center gap-2 p-2 rounded bg-slate-800 border-2 border-transparent hover:border-slate-600 transition-all" id="tool-none">
-                        <div class="w-3 h-3 border border-slate-600 rounded-sm"></div> <span class="text-[10px] font-bold">ERASE</span>
+                    <button onclick="setActiveZone('none')" class="flex items-center gap-2 p-2 rounded bg-slate-800 border-2 border-transparent" id="tool-none">
+                        <div class="w-3 h-3 border border-slate-600 rounded-sm"></div> <span class="text-[9px] font-bold uppercase">Eraser</span>
                     </button>
                 </div>
 
-                <!-- Painting Area -->
-                <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 shadow-inner flex justify-center">
-                    <div id="layout-grid" class="grid grid-cols-8 gap-[1.5px] w-full max-w-[240px]">
-                        <!-- Cells generated by JS -->
-                    </div>
+                <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 shadow-inner flex justify-center">
+                    <div id="layout-grid" class="grid grid-cols-8 gap-[1px] w-full max-w-[240px]"></div>
                 </div>
-                <p class="text-[9px] text-slate-500 mt-4 text-center italic">Painted areas determine text scaling boundaries.</p>
             </div>
 
-            <div class="p-5 flex-1 flex flex-col overflow-hidden">
-                <span class="text-[10px] font-bold text-slate-500 mb-3 uppercase tracking-tighter">Layout Registry</span>
-                <div id="layout-list" class="flex-1 overflow-y-auto space-y-1 pr-1">
-                    <!-- Layout items -->
-                </div>
+            <div class="p-5 flex-1 overflow-y-auto">
+                <span class="text-[10px] font-bold text-slate-500 mb-3 block uppercase tracking-tighter">Active Templates</span>
+                <div id="layout-list" class="space-y-1"></div>
             </div>
         </aside>
     </main>
 
     <script>
-        // --- State ---
+        const GRID_SIZE = 40;
+
         const App = {
             registry: [
-                { id: 'c1', name: 'FLAME BOLT', text: 'Deal 10 Fire Damage.\nApply Burn status.', color: '#ef4444', layoutId: 'default' },
-                { id: 'c2', name: 'IRON SHIELD', text: 'Blocks physical attacks.\n-2 Speed while equipped.', color: '#3b82f6', layoutId: 'default' }
+                { id: 'r1', name: 'WARRIOR', shape: 'Card', text: 'Health: 20\nPower: 4', color: '#dc2626', layoutId: 'default' },
+                { id: 'r2', name: 'TOKEN', shape: 'Token', text: '+1', color: '#ca8a04', layoutId: 'default' },
+                { id: 'r3', name: 'GRASS', shape: 'Tile', text: '', color: '#16a34a', layoutId: 'default' }
             ],
             instances: [],
-            layouts: [
-                { id: 'default', name: 'Basic Template', grid: Array(96).fill('none') }
-            ],
+            layouts: [{ id: 'default', name: 'Standard Layout', grid: Array(96).fill('none') }],
             activeLayoutId: 'default',
-            activeZone: 'header',
+            activeZone: 'title',
             camera: { x: 0, y: 0, zoom: 1 },
-            input: { isDragging: false, isPainting: false, lastX: 0, lastY: 0, target: null, mode: null },
+            input: { isDragging: false, isPainting: false, lastX: 0, lastY: 0, target: null, mode: null, hoveredId: null },
+            tooltip: { timer: null },
             peer: null,
             connections: new Map(),
             hot: null,
@@ -181,16 +172,15 @@
         const ctx = canvas.getContext('2d');
         const container = document.getElementById('board-container');
 
-        // --- Layout Designer ---
+        // --- Layout Array Logic ---
         function initLayoutDesigner() {
             const gridEl = document.getElementById('layout-grid');
             gridEl.innerHTML = '';
             for (let i = 0; i < 96; i++) {
                 const cell = document.createElement('div');
                 cell.className = 'layout-grid-cell zone-none';
-                cell.dataset.index = i;
-                cell.addEventListener('mousedown', (e) => { App.input.isPainting = true; paintCell(i); });
-                cell.addEventListener('mouseenter', (e) => { if (App.input.isPainting) paintCell(i); });
+                cell.addEventListener('mousedown', () => { App.input.isPainting = true; paintCell(i); });
+                cell.addEventListener('mouseenter', () => { if (App.input.isPainting) paintCell(i); });
                 gridEl.appendChild(cell);
             }
             window.addEventListener('mouseup', () => App.input.isPainting = false);
@@ -205,10 +195,11 @@
 
         function paintCell(index) {
             const layout = App.layouts.find(l => l.id === App.activeLayoutId);
-            if (!layout) return;
-            layout.grid[index] = App.activeZone;
-            refreshLayoutUI();
-            broadcast({ type: 'SYNC_LAYOUTS', layouts: App.layouts });
+            if (layout) {
+                layout.grid[index] = App.activeZone;
+                refreshLayoutUI();
+                broadcast({ type: 'SYNC_LAYOUTS', layouts: App.layouts });
+            }
         }
 
         function refreshLayoutUI() {
@@ -220,153 +211,121 @@
             list.innerHTML = '';
             App.layouts.forEach(l => {
                 const btn = document.createElement('button');
-                btn.className = `w-full text-left px-3 py-2 rounded text-[11px] font-bold transition-all flex items-center justify-between group ${l.id === App.activeLayoutId ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`;
-                btn.innerHTML = `<span>${l.name.toUpperCase()}</span> ${l.id !== 'default' ? `<i data-lucide="trash-2" class="w-3 h-3 hidden group-hover:block" onclick="deleteLayout('${l.id}')"></i>` : ''}`;
-                btn.onclick = (e) => { 
-                    if(e.target.tagName !== 'I') { App.activeLayoutId = l.id; refreshLayoutUI(); }
-                };
+                btn.className = `w-full text-left px-3 py-2 rounded text-[11px] font-bold ${l.id === App.activeLayoutId ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`;
+                btn.innerText = l.name.toUpperCase();
+                btn.onclick = () => { App.activeLayoutId = l.id; refreshLayoutUI(); };
                 list.appendChild(btn);
             });
-            lucide.createIcons();
         }
 
         function saveLayout() {
-            const name = prompt("Layout Name:", "New Card Template");
-            if (!name) return;
-            const newLayout = { id: 'l-' + Date.now(), name, grid: Array(96).fill('none') };
-            App.layouts.push(newLayout);
-            App.activeLayoutId = newLayout.id;
-            refreshLayoutUI();
-            broadcast({ type: 'SYNC_LAYOUTS', layouts: App.layouts });
+            const name = prompt("Layout Name:");
+            if (name) {
+                const newLayout = { id: 'l-' + Date.now(), name, grid: Array(96).fill('none') };
+                App.layouts.push(newLayout);
+                App.activeLayoutId = newLayout.id;
+                refreshLayoutUI();
+                broadcast({ type: 'SYNC_LAYOUTS', layouts: App.layouts });
+            }
         }
 
-        // --- Data Registry ---
+        // --- Component Registry Table ---
         function initTable() {
             App.hot = new Handsontable(document.getElementById('hot-registry'), {
                 data: App.registry,
                 columns: [
-                    { data: 'name', type: 'text', placeholder: 'Header Text' },
-                    { data: 'text', type: 'text', placeholder: 'Body Content' },
+                    { data: 'name', type: 'text' },
+                    { data: 'shape', type: 'dropdown', source: ['Card', 'Token', 'Tile'] },
+                    { data: 'text', type: 'text' },
                     { data: 'color', type: 'text' },
                     { data: 'layoutId', type: 'dropdown', source: () => App.layouts.map(l => l.id) }
                 ],
-                colHeaders: ['NAME', 'CONTENT', 'HEX', 'LAYOUT'],
-                stretchH: 'all',
-                height: 'auto',
-                licenseKey: 'non-commercial-and-evaluation',
+                colHeaders: ['NAME', 'SHAPE', 'CONTENT', 'HEX', 'LAYOUT'],
+                stretchH: 'all', height: 'auto', licenseKey: 'non-commercial-and-evaluation',
                 afterChange: () => { broadcast({ type: 'SYNC_REGISTRY', registry: App.registry }); },
                 afterSelection: (row) => {
                     App.selectedRegistryId = App.hot.getSourceDataAtRow(row).id;
                     document.getElementById('spawn-btn').disabled = false;
-                    document.getElementById('selection-status').innerText = `Selected: ${App.hot.getSourceDataAtRow(row).name}`;
                 }
             });
         }
 
         function addRow() {
-            App.registry.push({ id: 'id-' + Date.now(), name: 'NEW COMPONENT', text: 'Description here...', color: '#6366f1', layoutId: 'default' });
+            App.registry.push({ id: 'id-' + Date.now(), name: 'NEW', shape: 'Card', text: '', color: '#334155', layoutId: 'default' });
             App.hot.render();
             broadcast({ type: 'SYNC_REGISTRY', registry: App.registry });
         }
 
-        // --- Peer Networking ---
-        function initPeer() {
-            App.peer = new Peer();
-            App.peer.on('open', id => document.getElementById('my-peer-id').innerText = id);
-            App.peer.on('connection', conn => {
-                setupConn(conn);
-                setTimeout(() => conn.send({ type: 'FULL_SYNC', registry: App.registry, instances: App.instances, layouts: App.layouts }), 500);
-            });
+        // --- Tooltip & Hover ---
+        function handleHover(instanceId, x, y) {
+            if (App.input.hoveredId === instanceId) return;
+            clearTimeout(App.tooltip.timer);
+            const tip = document.getElementById('component-tooltip');
+            tip.style.opacity = '0';
+            App.input.hoveredId = instanceId;
+
+            if (instanceId) {
+                App.tooltip.timer = setTimeout(() => {
+                    const inst = App.instances.find(i => i.id === instanceId);
+                    const data = App.registry.find(r => r.id === inst?.registryId);
+                    if (!data) return;
+                    document.getElementById('tooltip-name').innerText = data.name;
+                    document.getElementById('tooltip-shape-val').innerText = data.shape;
+                    document.getElementById('tooltip-content').innerText = data.text;
+                    document.getElementById('tooltip-color-strip').style.backgroundColor = data.color;
+                    tip.style.left = (x + 15) + 'px';
+                    tip.style.top = (y + 15) + 'px';
+                    tip.style.opacity = '1';
+                }, 2000);
+            }
         }
 
-        function connectToPeer() {
-            const id = document.getElementById('connect-id').value;
-            if (id) setupConn(App.peer.connect(id));
-        }
-
-        function setupConn(conn) {
-            App.connections.set(conn.peer, conn);
-            conn.on('data', data => {
-                if (data.type === 'FULL_SYNC') {
-                    App.registry = data.registry; App.instances = data.instances; App.layouts = data.layouts;
-                    App.hot.loadData(App.registry); refreshLayoutUI();
-                } else if (data.type === 'SYNC_REGISTRY') {
-                    App.registry = data.registry; App.hot.loadData(App.registry);
-                } else if (data.type === 'SYNC_LAYOUTS') {
-                    App.layouts = data.layouts; refreshLayoutUI();
-                } else if (data.type === 'INST_MOVE') {
-                    const inst = App.instances.find(i => i.id === data.id);
-                    if (inst) { inst.x = data.x; inst.y = data.y; inst.zIndex = data.zIndex; }
-                } else if (data.type === 'INST_SPAWN') { App.instances.push(data.inst); }
-            });
-            updateBadge();
-        }
-
-        function broadcast(msg) { App.connections.forEach(c => c.send(msg)); }
-
-        function updateBadge() {
-            const active = App.connections.size > 0;
-            const dot = document.getElementById('status-dot');
-            dot.className = `w-2 h-2 rounded-full ${active ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-red-500'}`;
-            document.getElementById('status-text').innerText = active ? `${App.connections.size} PEERS` : 'OFFLINE';
-        }
-
-        // --- Scaling Text Engine ---
-        function getZoneBounds(grid, zoneType) {
-            let minX = 8, minY = 12, maxX = 0, maxY = 0;
-            let found = false;
+        // --- Rendering Engine & Grid Snapping ---
+        function getZoneBounds(grid, zoneType, shape) {
+            let minX = 8, minY = 12, maxX = 0, maxY = 0, found = false;
             grid.forEach((zone, idx) => {
                 if (zone === zoneType) {
-                    const x = idx % 8;
-                    const y = Math.floor(idx / 8);
+                    const x = idx % 8, y = Math.floor(idx / 8);
                     minX = Math.min(minX, x); minY = Math.min(minY, y);
                     maxX = Math.max(maxX, x + 1); maxY = Math.max(maxY, y + 1);
                     found = true;
                 }
             });
             if (!found) return null;
+            const dims = getShapeDims(shape);
             return { 
-                x: minX * 10 - 40, y: minY * 10 - 60, 
-                w: (maxX - minX) * 10, h: (maxY - minY) * 10 
+                x: (minX * (dims.w/8)) - dims.w/2, 
+                y: (minY * (dims.h/12)) - dims.h/2, 
+                w: (maxX - minX) * (dims.w/8), 
+                h: (maxY - minY) * (dims.h/12) 
             };
+        }
+
+        function getShapeDims(shape) {
+            if (shape === 'Card') return { w: 80, h: 120 };
+            if (shape === 'Token') return { w: 40, h: 40 };
+            return { w: 80, h: 80 }; // Tile
         }
 
         function drawScaledText(ctx, text, rect, isBold = false) {
             if (!text) return;
-            const padding = 2;
-            const maxWidth = rect.w - (padding * 2);
-            const maxHeight = rect.h - (padding * 2);
-            
-            let fontSize = 40; // Start large
-            ctx.font = `${isBold ? 'bold' : ''} ${fontSize}px sans-serif`;
-            
-            // Handle Multi-line
+            let fontSize = 40;
             const lines = text.split('\n');
-            
             const findSize = () => {
                 while (fontSize > 2) {
                     ctx.font = `${isBold ? 'bold' : ''} ${fontSize}px sans-serif`;
-                    let totalHeight = lines.length * fontSize * 1.1;
-                    let widestLine = 0;
-                    lines.forEach(l => { widestLine = Math.max(widestLine, ctx.measureText(l).width); });
-                    
-                    if (widestLine <= maxWidth && totalHeight <= maxHeight) break;
+                    let totalH = lines.length * fontSize * 1.1, widest = 0;
+                    lines.forEach(l => widest = Math.max(widest, ctx.measureText(l).width));
+                    if (widest <= rect.w - 4 && totalH <= rect.h - 4) break;
                     fontSize -= 0.5;
                 }
             };
-            
             findSize();
-            
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             const startY = rect.y + (rect.h / 2) - ((lines.length - 1) * fontSize * 1.1 / 2);
-            
-            lines.forEach((line, i) => {
-                ctx.fillText(line, rect.x + rect.w/2, startY + (i * fontSize * 1.1));
-            });
+            lines.forEach((line, i) => ctx.fillText(line, rect.x + rect.w/2, startY + (i * fontSize * 1.1)));
         }
 
-        // --- Rendering Loop ---
         function initCanvas() {
             const resize = () => { canvas.width = container.clientWidth; canvas.height = container.clientHeight; };
             window.addEventListener('resize', resize); resize();
@@ -374,7 +333,8 @@
             container.addEventListener('mousedown', e => {
                 const world = screenToWorld(e.offsetX, e.offsetY);
                 const hit = [...App.instances].sort((a,b) => b.zIndex - a.zIndex).find(i => {
-                    return world.x > i.x - 40 && world.x < i.x + 40 && world.y > i.y - 60 && world.y < i.y + 60;
+                    const dims = getShapeDims(App.registry.find(r => r.id === i.registryId)?.shape);
+                    return world.x > i.x - dims.w/2 && world.x < i.x + dims.w/2 && world.y > i.y - dims.h/2 && world.y < i.y + dims.h/2;
                 });
                 if (hit) { App.input.target = hit; App.input.mode = 'MOVE'; hit.zIndex = ++App.nextZ; }
                 else { App.input.mode = 'PAN'; }
@@ -382,17 +342,36 @@
             });
 
             window.addEventListener('mousemove', e => {
+                const rect = canvas.getBoundingClientRect();
+                const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+                const hit = [...App.instances].sort((a,b) => b.zIndex - a.zIndex).find(i => {
+                    const dims = getShapeDims(App.registry.find(r => r.id === i.registryId)?.shape);
+                    return world.x > i.x - dims.w/2 && world.x < i.x + dims.w/2 && world.y > i.y - dims.h/2 && world.y < i.y + dims.h/2;
+                });
+                handleHover(hit?.id, e.clientX, e.clientY);
+
                 if (!App.input.isDragging) return;
-                const dx = e.clientX - App.input.lastX; const dy = e.clientY - App.input.lastY;
+                const dx = e.clientX - App.input.lastX, dy = e.clientY - App.input.lastY;
                 if (App.input.mode === 'PAN') { App.camera.x += dx; App.camera.y += dy; }
                 else if (App.input.target) {
-                    App.input.target.x += dx / App.camera.zoom; App.input.target.y += dy / App.camera.zoom;
-                    broadcast({ type: 'INST_MOVE', id: App.input.target.id, x: App.input.target.x, y: App.input.target.y, zIndex: App.input.target.zIndex });
+                    App.input.target.x += dx / App.camera.zoom;
+                    App.input.target.y += dy / App.camera.zoom;
+                    // Snap on broadcast/drag
+                    const snappedX = Math.round(App.input.target.x / GRID_SIZE) * GRID_SIZE;
+                    const snappedY = Math.round(App.input.target.y / GRID_SIZE) * GRID_SIZE;
+                    broadcast({ type: 'INST_MOVE', id: App.input.target.id, x: snappedX, y: snappedY, zIndex: App.input.target.zIndex });
                 }
                 App.input.lastX = e.clientX; App.input.lastY = e.clientY;
             });
 
-            window.addEventListener('mouseup', () => App.input.isDragging = false);
+            window.addEventListener('mouseup', () => {
+                if (App.input.target) {
+                    App.input.target.x = Math.round(App.input.target.x / GRID_SIZE) * GRID_SIZE;
+                    App.input.target.y = Math.round(App.input.target.y / GRID_SIZE) * GRID_SIZE;
+                }
+                App.input.isDragging = false;
+            });
+            
             container.addEventListener('wheel', e => {
                 e.preventDefault();
                 const factor = Math.pow(1.1, -e.deltaY / 200);
@@ -400,7 +379,7 @@
                 App.camera.x = e.offsetX - (e.offsetX - App.camera.x) * (newZ / App.camera.zoom);
                 App.camera.y = e.offsetY - (e.offsetY - App.camera.y) * (newZ / App.camera.zoom);
                 App.camera.zoom = newZ;
-                document.getElementById('zoom-text').innerText = `Zoom: ${Math.round(newZ * 100)}%`;
+                document.getElementById('zoom-text').innerText = `${Math.round(newZ * 100)}% Zoom`;
             });
         }
 
@@ -408,14 +387,21 @@
 
         function spawnSelected() {
             const world = screenToWorld(canvas.width/2, canvas.height/2);
-            const inst = { id: 'i-'+Date.now(), registryId: App.selectedRegistryId, x: world.x, y: world.y, zIndex: ++App.nextZ };
+            const inst = { 
+                id: 'i-'+Date.now(), 
+                registryId: App.selectedRegistryId, 
+                x: Math.round(world.x / GRID_SIZE) * GRID_SIZE, 
+                y: Math.round(world.y / GRID_SIZE) * GRID_SIZE, 
+                zIndex: ++App.nextZ 
+            };
             App.instances.push(inst);
             broadcast({ type: 'INST_SPAWN', inst });
-            document.getElementById('count-text').innerText = `Instances: ${App.instances.length}`;
+            document.getElementById('count-text').innerText = `${App.instances.length} Objects`;
         }
 
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGrid();
             ctx.save();
             ctx.translate(App.camera.x, App.camera.y);
             ctx.scale(App.camera.zoom, App.camera.zoom);
@@ -426,50 +412,53 @@
                 const layout = App.layouts.find(l => l.id === data?.layoutId) || App.layouts[0];
                 if (!data) return;
 
+                const dims = getShapeDims(data.shape);
+                const isHovered = App.input.hoveredId === inst.id;
+
                 ctx.save();
                 ctx.translate(inst.x, inst.y);
 
-                // Card Base
-                ctx.shadowColor = 'rgba(0,0,0,0.5)';
-                ctx.shadowBlur = 10;
-                ctx.shadowOffsetY = 4;
+                if (isHovered) { ctx.shadowColor = 'rgba(99, 102, 241, 0.8)'; ctx.shadowBlur = 15; }
+                else { ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4; }
+
                 ctx.fillStyle = data.color;
-                ctx.strokeStyle = '#ffffff44';
-                ctx.lineWidth = 1;
-                roundRect(ctx, -40, -60, 80, 120, 6, true, true);
+                ctx.strokeStyle = isHovered ? '#fff' : 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = isHovered ? 2 : 1;
+
+                if (data.shape === 'Token') {
+                    ctx.beginPath(); ctx.arc(0, 0, dims.w/2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                } else {
+                    roundRect(ctx, -dims.w/2, -dims.h/2, dims.w, dims.h, 4, true, true);
+                }
                 ctx.shadowColor = "transparent";
 
-                // Draw Zones from Grid
-                const headerRect = getZoneBounds(layout.grid, 'header');
-                const bodyRect = getZoneBounds(layout.grid, 'body');
-                const imageRects = getZoneBounds(layout.grid, 'image');
+                // Map Layout Areas
+                const titleRect = getZoneBounds(layout.grid, 'title', data.shape);
+                const descRect = getZoneBounds(layout.grid, 'description', data.shape);
+                const artRect = getZoneBounds(layout.grid, 'art', data.shape);
 
-                // Visual debug for images
-                if (imageRects) {
-                    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-                    ctx.fillRect(imageRects.x, imageRects.y, imageRects.w, imageRects.h);
-                    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-                    ctx.strokeRect(imageRects.x, imageRects.y, imageRects.w, imageRects.h);
-                }
-
-                // Render Content
+                if (artRect) { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(artRect.x, artRect.y, artRect.w, artRect.h); }
                 ctx.fillStyle = getContrastYIQ(data.color);
-                if (headerRect) drawScaledText(ctx, data.name, headerRect, true);
-                if (bodyRect) drawScaledText(ctx, data.text, bodyRect, false);
+                if (titleRect) drawScaledText(ctx, data.name, titleRect, true);
+                if (descRect) drawScaledText(ctx, data.text, descRect, false);
 
                 ctx.restore();
             });
-
             ctx.restore();
             requestAnimationFrame(render);
         }
 
+        function drawGrid() {
+            const step = GRID_SIZE * App.camera.zoom;
+            const offX = App.camera.x % step, offY = App.camera.y % step;
+            ctx.beginPath(); ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+            for (let x = offX; x < canvas.width; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); }
+            for (let y = offY; y < canvas.height; y += step) { ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); }
+            ctx.stroke();
+        }
+
         function roundRect(ctx, x, y, w, h, r, fill, stroke) {
-            ctx.beginPath();
-            ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-            ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-            ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-            ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y); ctx.closePath();
+            ctx.beginPath(); ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r); ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h); ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r); ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y); ctx.closePath();
             if (fill) ctx.fill(); if (stroke) ctx.stroke();
         }
 
@@ -479,10 +468,37 @@
             return ((r*299)+(g*587)+(b*114))/1000 >= 128 ? 'black' : 'white';
         }
 
+        // --- Networking ---
+        function initPeer() {
+            App.peer = new Peer();
+            App.peer.on('open', id => document.getElementById('my-peer-id').innerText = id);
+            App.peer.on('connection', conn => {
+                setupConn(conn);
+                setTimeout(() => conn.send({ type: 'FULL_SYNC', registry: App.registry, instances: App.instances, layouts: App.layouts }), 500);
+            });
+        }
+        function connectToPeer() {
+            const id = document.getElementById('connect-id').value;
+            if (id) setupConn(App.peer.connect(id));
+        }
+        function setupConn(conn) {
+            App.connections.set(conn.peer, conn);
+            conn.on('data', data => {
+                if (data.type === 'FULL_SYNC') { App.registry = data.registry; App.instances = data.instances; App.layouts = data.layouts; App.hot.loadData(App.registry); refreshLayoutUI(); }
+                else if (data.type === 'SYNC_REGISTRY') { App.registry = data.registry; App.hot.loadData(App.registry); }
+                else if (data.type === 'SYNC_LAYOUTS') { App.layouts = data.layouts; refreshLayoutUI(); }
+                else if (data.type === 'INST_MOVE') { const inst = App.instances.find(i => i.id === data.id); if (inst) { inst.x = data.x; inst.y = data.y; inst.zIndex = data.zIndex; } }
+                else if (data.type === 'INST_SPAWN') { App.instances.push(data.inst); }
+            });
+            const active = App.connections.size > 0;
+            document.getElementById('status-dot').className = `w-2 h-2 rounded-full ${active ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-red-500'}`;
+            document.getElementById('status-text').innerText = active ? `${App.connections.size} PEERS` : 'OFFLINE';
+        }
+        function broadcast(msg) { App.connections.forEach(c => c.send(msg)); }
         function copyId() { navigator.clipboard.writeText(document.getElementById('my-peer-id').innerText); }
 
         window.onload = () => {
-            lucide.createIcons(); initLayoutDesigner(); initTable(); initCanvas(); initPeer(); render(); setActiveZone('header');
+            lucide.createIcons(); initLayoutDesigner(); initTable(); initCanvas(); initPeer(); render(); setActiveZone('title');
         };
     </script>
 </body>
